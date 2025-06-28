@@ -17,8 +17,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Fetch books from Readwise API
-    const booksResponse = await fetch('https://readwise.io/api/v2/books/', {
+    // Get books from Readwise (filter for books only)
+    const booksResponse = await fetch('https://readwise.io/api/v2/books/?category=books', {
       headers: {
         'Authorization': `Token ${readwiseToken}`,
         'Content-Type': 'application/json'
@@ -31,8 +31,21 @@ export default async function handler(req, res) {
 
     const booksData = await booksResponse.json();
     
-    // Get highlights for each book (limited to recent books for performance)
-    const recentBooks = booksData.results.slice(0, 10);
+    // Get highlights for each book (analyzing more books for better recommendations)
+    const recentBooks = booksData.results
+      .filter(book => {
+        // Additional filtering to ensure we only get actual books
+        const hasAuthor = book.author && book.author.trim() !== '' && !book.author.includes('http');
+        const hasTitle = book.title && book.title.trim() !== '' && !book.title.includes('http');
+        const notWebContent = !book.source_url?.includes('twitter.com') && 
+                             !book.source_url?.includes('x.com') &&
+                             !book.source_url?.includes('medium.com') &&
+                             !book.source_url?.includes('substack.com');
+        const authorReasonableLength = book.author && book.author.length < 100; // Authors usually have shorter names
+        
+        return hasAuthor && hasTitle && notWebContent && authorReasonableLength;
+      })
+      .slice(0, 50);
     const booksWithHighlights = [];
 
     for (const book of recentBooks) {
