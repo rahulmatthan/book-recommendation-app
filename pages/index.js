@@ -11,11 +11,11 @@ export default function BookRecommendationApp() {
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError] = useState(null);
 
-  // Fetch random selection from Readwise library
+  // Fetch random selection from Readwise library (books only)
   const fetchRandomBooks = async () => {
     setLoading(true);
     setError(null);
-    setLoadingStage('Fetching your reading library...');
+    setLoadingStage('Fetching your book library...');
     
     try {
       const response = await fetch('/api/readwise');
@@ -25,8 +25,25 @@ export default function BookRecommendationApp() {
       }
       const data = await response.json();
       
+      // Filter to only include actual books (not articles, tweets, etc.)
+      const booksOnly = data.results.filter(item => {
+        // Filter criteria for books
+        const hasAuthor = item.author && item.author.trim() !== '';
+        const hasTitle = item.title && item.title.trim() !== '';
+        const titleNotUrl = !item.title.includes('http') && !item.title.includes('www.');
+        const notTweet = !item.source_url?.includes('twitter.com') && !item.source_url?.includes('x.com');
+        const notArticle = !item.source_url?.includes('medium.com') && 
+                          !item.source_url?.includes('substack.com') &&
+                          !item.source_url?.includes('blog');
+        const likelyBook = item.category === 'books' || 
+                          (item.author && item.author.length < 50) || // Authors usually have shorter names
+                          item.cover_image_url; // Books often have cover images
+        
+        return hasAuthor && hasTitle && titleNotUrl && notTweet && notArticle && likelyBook;
+      });
+      
       // Get a random selection of 5 books
-      const shuffled = data.results.sort(() => 0.5 - Math.random());
+      const shuffled = booksOnly.sort(() => 0.5 - Math.random());
       const randomBooks = shuffled.slice(0, 5).map(book => ({
         id: book.id,
         title: book.title,
@@ -51,7 +68,7 @@ export default function BookRecommendationApp() {
   const findSimilarBooks = async (book) => {
     setLoading(true);
     setSelectedBook(book);
-    setLoadingStage('Searching prestigious book review sites...');
+    setLoadingStage('Finding similar books from review sources...');
     
     try {
       const response = await fetch('/api/find-similar', {
@@ -104,66 +121,67 @@ export default function BookRecommendationApp() {
   return (
     <>
       <Head>
-        <title>The Literary Gazette - Curated Book Discovery</title>
+        <title>Book Discovery - Curated Recommendations</title>
         <meta name="description" content="Discover your next great read through curated recommendations from prestigious book review sources" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-white py-12 px-6 font-serif">
-        <div className="max-w-5xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-6 font-sans">
+        <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-12 border-b-4 border-black pb-8">
-            <div className="mb-6">
-              <h1 className="text-5xl font-bold text-black mb-2 tracking-wide">THE LITERARY GAZETTE</h1>
-              <div className="w-32 h-0.5 bg-black mx-auto mb-4"></div>
-              <p className="text-lg text-gray-700 italic">Curated by Leading Review Publications • Est. 2025</p>
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mb-8">
+              <Book className="w-10 h-10 text-white" />
             </div>
-            <div className="flex items-center justify-center">
-              <Book className="w-6 h-6 text-black mr-2" />
-              <span className="text-sm font-semibold tracking-widest uppercase">Expert-Curated Literary Discovery</span>
-            </div>
+            <h1 className="text-5xl font-bold text-gray-800 mb-4">Book Discovery</h1>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Find your next great read through personalized recommendations from leading book critics and review sources
+            </p>
           </div>
 
           {/* Error Display */}
           {error && (
-            <div className="border-2 border-red-600 bg-red-50 p-6 mb-8">
-              <div className="flex items-center justify-center">
-                <span className="text-red-800 font-bold text-sm tracking-wide uppercase">Configuration Error</span>
+            <div className="bg-red-50 border-l-4 border-red-400 p-6 mb-8 rounded-lg">
+              <div className="flex items-center">
+                <div className="text-red-700">
+                  <h3 className="text-lg font-semibold">Something went wrong</h3>
+                  <p className="mt-2 text-red-600">{error}</p>
+                  <button 
+                    onClick={startOver}
+                    className="mt-4 bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
               </div>
-              <p className="text-red-700 text-center mt-2 text-sm">{error}</p>
-              <button 
-                onClick={startOver}
-                className="mt-4 mx-auto block bg-red-600 text-white px-4 py-2 text-sm uppercase tracking-wide"
-              >
-                Try Again
-              </button>
             </div>
           )}
 
           {/* Step 1: Start */}
           {step === 'start' && !error && (
-            <div className="text-center mb-12">
-              <div className="border-2 border-black p-8 bg-gray-50">
-                <h2 className="text-2xl font-bold mb-4 text-black">DISCOVER YOUR NEXT LITERARY PURSUIT</h2>
-                <p className="text-gray-700 mb-6 italic">
-                  We'll show you 5 books from your library. Choose one that represents the type of book you'd like to read next, 
-                  and we'll find similar recommendations from prestigious review sources.
+            <div className="text-center mb-16">
+              <div className="bg-white rounded-2xl p-12 shadow-lg max-w-2xl mx-auto">
+                <h2 className="text-3xl font-bold text-gray-800 mb-6">Let's Find Your Next Book</h2>
+                <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+                  We'll show you 5 books from your Readwise library. Choose one that represents 
+                  the type of book you'd like to read next, and we'll find similar recommendations 
+                  from prestigious review sources.
                 </p>
                 <button
                   onClick={fetchRandomBooks}
                   disabled={loading}
-                  className="bg-black hover:bg-gray-800 disabled:bg-gray-400 text-white px-12 py-4 border-2 border-black font-bold text-sm tracking-widest uppercase transition-colors duration-200 flex items-center mx-auto"
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg disabled:opacity-50 flex items-center mx-auto"
                 >
                   {loading ? (
                     <>
-                      <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
+                      <RefreshCw className="w-6 h-6 mr-3 animate-spin" />
                       {loadingStage}
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5 mr-3" />
-                      Begin Discovery
+                      <Sparkles className="w-6 h-6 mr-3" />
+                      Start Discovery
                     </>
                   )}
                 </button>
@@ -173,36 +191,42 @@ export default function BookRecommendationApp() {
 
           {/* Step 2: Book Selection */}
           {step === 'selecting' && (
-            <div className="mb-12">
-              <div className="text-center border-b-2 border-black pb-4 mb-8">
-                <h2 className="text-3xl font-bold text-black mb-2">CHOOSE YOUR DIRECTION</h2>
-                <p className="text-gray-700 italic">Select the book that best represents what you'd like to read next</p>
+            <div className="mb-16">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl font-bold text-gray-800 mb-4">Choose Your Direction</h2>
+                <p className="text-xl text-gray-600">Which type of book would you like to explore?</p>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+              <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-2">
                 {readwiseBooks.map((book, index) => (
                   <div 
                     key={book.id} 
-                    className="border-2 border-black p-6 bg-white hover:bg-gray-50 cursor-pointer transition-all duration-200 hover:shadow-lg"
+                    className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl cursor-pointer transition-all duration-300 hover:scale-105 border border-gray-100"
                     onClick={() => findSimilarBooks(book)}
                   >
-                    <div className="flex items-start space-x-4">
-                      {book.cover && (
-                        <img 
-                          src={book.cover} 
-                          alt={book.title}
-                          className="w-16 h-24 object-cover border border-gray-300"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-black mb-1 leading-tight">{book.title}</h3>
-                        <p className="text-gray-800 font-semibold mb-3">by {book.author}</p>
-                        <p className="text-gray-700 text-sm line-clamp-3 mb-4">
-                          {book.notes.slice(0, 150)}...
+                    <div className="flex space-x-6">
+                      <div className="flex-shrink-0">
+                        {book.cover ? (
+                          <img 
+                            src={book.cover} 
+                            alt={book.title}
+                            className="w-24 h-36 object-cover rounded-lg shadow-md"
+                          />
+                        ) : (
+                          <div className="w-24 h-36 bg-gradient-to-b from-gray-200 to-gray-300 rounded-lg flex items-center justify-center shadow-md">
+                            <Book className="w-8 h-8 text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xl font-bold text-gray-800 mb-2 leading-tight">{book.title}</h3>
+                        <p className="text-lg text-gray-600 mb-4 font-medium">by {book.author}</p>
+                        <p className="text-gray-600 text-sm leading-relaxed mb-6 line-clamp-3">
+                          {book.notes.slice(0, 200)}...
                         </p>
-                        <div className="flex items-center text-black">
-                          <span className="text-sm font-bold tracking-wide uppercase">Choose This Direction</span>
-                          <ArrowRight className="w-4 h-4 ml-2" />
+                        <div className="flex items-center text-blue-600 font-semibold">
+                          <span>Choose this style</span>
+                          <ArrowRight className="w-5 h-5 ml-2" />
                         </div>
                       </div>
                     </div>
@@ -210,10 +234,10 @@ export default function BookRecommendationApp() {
                 ))}
               </div>
 
-              <div className="text-center mt-8">
+              <div className="text-center mt-12">
                 <button 
                   onClick={fetchRandomBooks}
-                  className="bg-white hover:bg-gray-100 text-black border-2 border-black px-6 py-3 text-sm font-bold tracking-wide uppercase"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-colors"
                 >
                   Show Different Books
                 </button>
@@ -223,85 +247,114 @@ export default function BookRecommendationApp() {
 
           {/* Loading for Step 2 */}
           {loading && step === 'selecting' && (
-            <div className="text-center py-16 border-2 border-black bg-gray-50">
-              <RefreshCw className="w-12 h-12 text-black mx-auto mb-4 animate-spin" />
-              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">{loadingStage}</h3>
-              <p className="text-gray-700 italic">Consulting FT Reviews, LRB, and other prestigious sources...</p>
+            <div className="text-center py-20">
+              <div className="bg-white rounded-2xl p-12 shadow-lg max-w-lg mx-auto">
+                <RefreshCw className="w-16 h-16 text-blue-500 mx-auto mb-6 animate-spin" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">{loadingStage}</h3>
+                <p className="text-gray-600">Searching through review sources and literary publications...</p>
+              </div>
             </div>
           )}
 
           {/* Step 3: Recommendations */}
           {step === 'recommendations' && recommendations.length > 0 && (
-            <div className="space-y-8">
-              <div className="text-center border-b-2 border-black pb-4 mb-8">
-                <h2 className="text-3xl font-bold text-black mb-2">CURATED RECOMMENDATIONS</h2>
-                <div className="flex items-center justify-center mb-4">
-                  <Check className="w-5 h-5 text-black mr-2" />
-                  <span className="text-sm font-semibold tracking-widest uppercase">Based on: "{selectedBook?.title}"</span>
+            <div className="space-y-12">
+              <div className="text-center mb-12">
+                <div className="inline-flex items-center bg-green-100 text-green-800 px-6 py-3 rounded-full mb-6">
+                  <Check className="w-5 h-5 mr-2" />
+                  <span className="font-semibold">Based on: "{selectedBook?.title}"</span>
                 </div>
-                <p className="text-gray-700 italic">From Financial Times, London Review of Books, and other leading critics</p>
+                <h2 className="text-4xl font-bold text-gray-800 mb-4">Your Curated Recommendations</h2>
+                <p className="text-xl text-gray-600">From Financial Times, Literary Reviews, and other prestigious sources</p>
               </div>
 
-              {recommendations.map((book, index) => (
-                <article key={index} className="border-2 border-black p-8 bg-white mb-8 hover:bg-gray-50 transition-colors duration-200">
-                  <header className="mb-6 pb-4 border-b border-gray-300">
-                    <h3 className="text-2xl font-bold text-black mb-2 leading-tight">{book.title}</h3>
-                    <p className="text-lg text-gray-800 font-semibold mb-3">by {book.author}</p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-black">
-                      <span className="flex items-center font-semibold">
-                        <Calendar className="w-4 h-4 mr-1" />
-                        {book.publicationDate}
-                      </span>
-                      <span className="px-3 py-1 border border-black text-black text-xs font-bold tracking-wide uppercase">
-                        {book.source}
-                      </span>
-                      {book.rating > 0 && (
-                        <span className="flex items-center font-semibold">
-                          <Star className="w-4 h-4 mr-1 fill-black text-black" />
-                          {book.rating}/5
-                        </span>
-                      )}
-                    </div>
-                  </header>
+              <div className="space-y-8">
+                {recommendations.map((book, index) => (
+                  <div key={index} className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100">
+                    <div className="grid md:grid-cols-4 gap-8">
+                      {/* Book Cover */}
+                      <div className="md:col-span-1">
+                        <div className="w-full max-w-48 mx-auto">
+                          {book.image ? (
+                            <img 
+                              src={book.image} 
+                              alt={book.title}
+                              className="w-full aspect-[3/4] object-cover rounded-lg shadow-lg"
+                            />
+                          ) : (
+                            <div className="w-full aspect-[3/4] bg-gradient-to-b from-gray-200 to-gray-300 rounded-lg flex items-center justify-center shadow-lg">
+                              <Book className="w-12 h-12 text-gray-500" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Book Details */}
+                      <div className="md:col-span-3 space-y-6">
+                        <div>
+                          <h3 className="text-2xl font-bold text-gray-800 mb-2 leading-tight">{book.title}</h3>
+                          <p className="text-xl text-gray-600 font-semibold mb-4">by {book.author}</p>
+                          
+                          <div className="flex flex-wrap items-center gap-4 mb-6">
+                            <span className="flex items-center text-gray-600">
+                              <Calendar className="w-4 h-4 mr-2" />
+                              {book.publicationDate}
+                            </span>
+                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
+                              {book.source}
+                            </span>
+                            {book.rating > 0 && (
+                              <span className="flex items-center text-gray-600">
+                                <Star className="w-4 h-4 mr-1 fill-yellow-400 text-yellow-400" />
+                                {book.rating}/5
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                  <div className="mb-6">
-                    <p className="text-gray-800 leading-relaxed text-justify mb-4">{book.description}</p>
-                    
-                    <div className="border-l-4 border-black pl-4 bg-gray-50 p-4">
-                      <h4 className="font-bold text-black text-sm tracking-wide uppercase mb-2">Critical Assessment</h4>
-                      <p className="text-gray-800 italic leading-relaxed">
-                        {book.reason}
-                      </p>
+                        {/* Description */}
+                        <div className="space-y-4">
+                          <h4 className="text-lg font-semibold text-gray-800">About this book</h4>
+                          <p className="text-gray-700 leading-relaxed">{book.description}</p>
+                        </div>
+                        
+                        {/* Why you'll like it */}
+                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">
+                          <h4 className="text-lg font-semibold text-gray-800 mb-3">Why you'll love this</h4>
+                          <p className="text-gray-700 leading-relaxed italic">{book.reason}</p>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-4 pt-4">
+                          <a
+                            href={getAmazonInLink(book.title, book.author)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 flex items-center shadow-lg"
+                          >
+                            Buy on Amazon.in
+                            <ExternalLink className="w-4 h-4 ml-2" />
+                          </a>
+                          <a
+                            href={getReviewLink(book.reviewUrl, book.title)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-colors flex items-center"
+                          >
+                            Read Reviews
+                            <ExternalLink className="w-4 h-4 ml-2" />
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <footer className="flex gap-4 pt-4 border-t border-gray-300">
-                    <a
-                      href={getAmazonInLink(book.title, book.author)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-black hover:bg-gray-800 text-white px-6 py-3 border-2 border-black text-sm font-bold tracking-wide uppercase transition-colors duration-200 flex items-center"
-                    >
-                      Purchase • Amazon.in
-                      <ExternalLink className="w-4 h-4 ml-2" />
-                    </a>
-                    <a
-                      href={getReviewLink(book.reviewUrl, book.title)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-white hover:bg-gray-100 text-black border-2 border-black px-6 py-3 text-sm font-bold tracking-wide uppercase transition-colors duration-200 flex items-center"
-                    >
-                      Read Review
-                      <ExternalLink className="w-4 h-4 ml-2" />
-                    </a>
-                  </footer>
-                </article>
-              ))}
-
-              <div className="text-center pt-8 border-t-2 border-black">
+              <div className="text-center pt-12">
                 <button 
                   onClick={startOver}
-                  className="bg-black hover:bg-gray-800 text-white px-8 py-3 border-2 border-black text-sm font-bold tracking-wide uppercase"
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg"
                 >
                   Find More Recommendations
                 </button>
@@ -310,25 +363,29 @@ export default function BookRecommendationApp() {
           )}
 
           {step === 'recommendations' && recommendations.length === 0 && !loading && (
-            <div className="text-center py-16 border-2 border-black bg-gray-50">
-              <Book className="w-24 h-24 text-black mx-auto mb-6" />
-              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">No Recommendations Found</h3>
-              <p className="text-gray-700 italic mb-4">We couldn't find similar books in our review sources</p>
-              <button 
-                onClick={startOver}
-                className="bg-black hover:bg-gray-800 text-white px-6 py-3 text-sm font-bold tracking-wide uppercase"
-              >
-                Try Different Selection
-              </button>
+            <div className="text-center py-20">
+              <div className="bg-white rounded-2xl p-12 shadow-lg max-w-lg mx-auto">
+                <Book className="w-20 h-20 text-gray-400 mx-auto mb-6" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">No Recommendations Found</h3>
+                <p className="text-gray-600 mb-6">We couldn't find similar books in our review sources</p>
+                <button 
+                  onClick={startOver}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
+                >
+                  Try Different Selection
+                </button>
+              </div>
             </div>
           )}
 
           {/* Initial state */}
           {step === 'start' && !loading && !error && recommendations.length === 0 && readwiseBooks.length === 0 && (
-            <div className="text-center py-16 border-2 border-black bg-gray-50">
-              <Book className="w-24 h-24 text-black mx-auto mb-6" />
-              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">Ready to Discover</h3>
-              <p className="text-gray-700 italic">Click above to begin your curated literary journey</p>
+            <div className="text-center py-20">
+              <div className="bg-white rounded-2xl p-12 shadow-lg max-w-lg mx-auto">
+                <Book className="w-20 h-20 text-gray-400 mx-auto mb-6" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">Ready to Discover</h3>
+                <p className="text-gray-600">Click above to begin your personalized book discovery journey</p>
+              </div>
             </div>
           )}
         </div>
