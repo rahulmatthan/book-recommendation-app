@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { Book, Calendar, Star, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
+import { Book, Calendar, Star, ExternalLink, RefreshCw, Sparkles, ArrowRight, Check } from 'lucide-react';
 import Head from 'next/head';
 
 export default function BookRecommendationApp() {
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
+  const [step, setStep] = useState('start'); // 'start', 'selecting', 'recommendations'
+  const [readwiseBooks, setReadwiseBooks] = useState([]);
+  const [selectedBook, setSelectedBook] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
-  const [readwiseData, setReadwiseData] = useState(null);
   const [error, setError] = useState(null);
 
-  // Fetch real Readwise data via our API endpoint
-  const fetchReadwiseData = async () => {
+  // Fetch random selection from Readwise library
+  const fetchRandomBooks = async () => {
+    setLoading(true);
+    setError(null);
+    setLoadingStage('Fetching your reading library...');
+    
     try {
       const response = await fetch('/api/readwise');
       if (!response.ok) {
@@ -19,72 +25,69 @@ export default function BookRecommendationApp() {
       }
       const data = await response.json();
       
-      // Process the Readwise data to extract preferences  
-      const recentBooks = data.results.slice(0, 50).map(book => ({
+      // Get a random selection of 5 books
+      const shuffled = data.results.sort(() => 0.5 - Math.random());
+      const randomBooks = shuffled.slice(0, 5).map(book => ({
+        id: book.id,
         title: book.title,
         author: book.author,
-        notes: book.highlights?.map(h => h.text).join('. ') || book.summary || "No notes available"
+        notes: book.highlights?.map(h => h.text).join('. ') || book.summary || "No notes available",
+        cover: book.cover_image_url
       }));
 
-      return {
-        recentBooks,
-        totalBooks: data.results.length
-      };
+      setReadwiseBooks(randomBooks);
+      setStep('selecting');
+      
     } catch (error) {
       console.error('Error fetching Readwise data:', error);
-      throw error;
+      setError(error.message || 'Failed to fetch your reading library');
     }
+    
+    setLoading(false);
+    setLoadingStage('');
   };
 
-  const generateRecommendations = async () => {
+  // Search review sites based on selected book
+  const findSimilarBooks = async (book) => {
     setLoading(true);
-    setError(null);
-    setRecommendations([]);
-    setLoadingStage('Connecting to your Readwise library...');
+    setSelectedBook(book);
+    setLoadingStage('Searching prestigious book review sites...');
     
     try {
-      // Fetch Readwise data
-      const readwise = await fetchReadwiseData();
-      setReadwiseData(readwise);
-      
-      setLoadingStage('Analyzing your reading patterns and preferences...');
-      
-      // Add a small delay to show the progress
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setLoadingStage('Searching the web for recently published books...');
-
-      // Generate recommendations using our web-searching API
-      const recommendResponse = await fetch('/api/recommendations', {
+      const response = await fetch('/api/find-similar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          readingHistory: readwise.recentBooks
+          referenceBook: book
         })
       });
 
-      if (!recommendResponse.ok) {
-        const errorData = await recommendResponse.json();
-        throw new Error(errorData.message || 'Failed to generate recommendations');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to find recommendations');
       }
 
-      setLoadingStage('Matching books to your interests...');
-      
-      const data = await recommendResponse.json();
-      
-      // Sort by publication year (newest first)
-      const sortedRecommendations = data.recommendations.sort((a, b) => b.publicationYear - a.publicationYear);
-      setRecommendations(sortedRecommendations);
+      const data = await response.json();
+      setRecommendations(data.recommendations);
+      setStep('recommendations');
       
     } catch (error) {
-      console.error('Error generating recommendations:', error);
-      setError(error.message || 'Failed to generate recommendations');
+      console.error('Error finding similar books:', error);
+      setError(error.message || 'Failed to find recommendations');
     }
     
     setLoading(false);
     setLoadingStage('');
+  };
+
+  const startOver = () => {
+    setStep('start');
+    setReadwiseBooks([]);
+    setSelectedBook(null);
+    setRecommendations([]);
+    setError(null);
   };
 
   const getAmazonInLink = (title, author) => {
@@ -92,19 +95,17 @@ export default function BookRecommendationApp() {
     return `https://www.amazon.in/s?k=${searchQuery}&i=stripbooks`;
   };
 
-  const getReviewLink = (title, source) => {
+  const getReviewLink = (url, title) => {
+    if (url) return url;
     const searchQuery = encodeURIComponent(title);
-    if (source === "Goodreads") {
-      return `https://www.goodreads.com/search?q=${searchQuery}`;
-    }
-    return `https://www.amazon.in/s?k=${searchQuery}&i=stripbooks#customerReviews`;
+    return `https://www.goodreads.com/search?q=${searchQuery}`;
   };
 
   return (
     <>
       <Head>
-        <title>The Literary Gazette - Personalized Book Recommendations</title>
-        <meta name="description" content="AI-powered book recommendations based on your Readwise reading history" />
+        <title>The Literary Gazette - Curated Book Discovery</title>
+        <meta name="description" content="Discover your next great read through curated recommendations from prestigious book review sources" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
@@ -116,11 +117,11 @@ export default function BookRecommendationApp() {
             <div className="mb-6">
               <h1 className="text-5xl font-bold text-black mb-2 tracking-wide">THE LITERARY GAZETTE</h1>
               <div className="w-32 h-0.5 bg-black mx-auto mb-4"></div>
-              <p className="text-lg text-gray-700 italic">Curated Book Recommendations • Est. 2025</p>
+              <p className="text-lg text-gray-700 italic">Curated by Leading Review Publications • Est. 2025</p>
             </div>
             <div className="flex items-center justify-center">
               <Book className="w-6 h-6 text-black mr-2" />
-              <span className="text-sm font-semibold tracking-widest uppercase">Personalized Literary Discovery</span>
+              <span className="text-sm font-semibold tracking-widest uppercase">Expert-Curated Literary Discovery</span>
             </div>
           </div>
 
@@ -131,61 +132,114 @@ export default function BookRecommendationApp() {
                 <span className="text-red-800 font-bold text-sm tracking-wide uppercase">Configuration Error</span>
               </div>
               <p className="text-red-700 text-center mt-2 text-sm">{error}</p>
-              <p className="text-red-600 text-center mt-2 text-xs">Please check your Readwise API token configuration in Vercel.</p>
+              <button 
+                onClick={startOver}
+                className="mt-4 mx-auto block bg-red-600 text-white px-4 py-2 text-sm uppercase tracking-wide"
+              >
+                Try Again
+              </button>
             </div>
           )}
 
-          {/* Action Button */}
-          <div className="text-center mb-12">
-            <div className="border-2 border-black p-8 bg-gray-50">
-              <h2 className="text-2xl font-bold mb-4 text-black">DISCOVER YOUR NEXT LITERARY PURSUIT</h2>
-              <button
-                onClick={generateRecommendations}
-                disabled={loading}
-                className="bg-black hover:bg-gray-800 disabled:bg-gray-400 text-white px-12 py-4 border-2 border-black font-bold text-sm tracking-widest uppercase transition-colors duration-200 flex items-center mx-auto"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
-                    {loadingStage || 'Searching for your perfect books...'}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 mr-3" />
-                    Generate Recommendations
-                  </>
-                )}
-              </button>
-              {loading && (
-                <div className="mt-4 text-center">
-                  <p className="text-gray-600 text-sm italic">
-                    This may take 1-2 minutes as we search the web for the latest publications...
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Readwise Status */}
-          {readwiseData && !error && (
-            <div className="border-2 border-black bg-gray-50 p-6 mb-8">
-              <div className="flex items-center justify-center">
-                <RefreshCw className="w-5 h-5 text-black mr-3" />
-                <span className="text-black font-bold text-sm tracking-wide uppercase">Library Analysis Complete</span>
-                <span className="text-black ml-4 text-sm">• {readwiseData.recentBooks.length} volumes examined</span>
+          {/* Step 1: Start */}
+          {step === 'start' && !error && (
+            <div className="text-center mb-12">
+              <div className="border-2 border-black p-8 bg-gray-50">
+                <h2 className="text-2xl font-bold mb-4 text-black">DISCOVER YOUR NEXT LITERARY PURSUIT</h2>
+                <p className="text-gray-700 mb-6 italic">
+                  We'll show you 5 books from your library. Choose one that represents the type of book you'd like to read next, 
+                  and we'll find similar recommendations from prestigious review sources.
+                </p>
+                <button
+                  onClick={fetchRandomBooks}
+                  disabled={loading}
+                  className="bg-black hover:bg-gray-800 disabled:bg-gray-400 text-white px-12 py-4 border-2 border-black font-bold text-sm tracking-widest uppercase transition-colors duration-200 flex items-center mx-auto"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
+                      {loadingStage}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-3" />
+                      Begin Discovery
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           )}
 
-          {/* Recommendations */}
-          {recommendations.length > 0 && !error && (
+          {/* Step 2: Book Selection */}
+          {step === 'selecting' && (
+            <div className="mb-12">
+              <div className="text-center border-b-2 border-black pb-4 mb-8">
+                <h2 className="text-3xl font-bold text-black mb-2">CHOOSE YOUR DIRECTION</h2>
+                <p className="text-gray-700 italic">Select the book that best represents what you'd like to read next</p>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+                {readwiseBooks.map((book, index) => (
+                  <div 
+                    key={book.id} 
+                    className="border-2 border-black p-6 bg-white hover:bg-gray-50 cursor-pointer transition-all duration-200 hover:shadow-lg"
+                    onClick={() => findSimilarBooks(book)}
+                  >
+                    <div className="flex items-start space-x-4">
+                      {book.cover && (
+                        <img 
+                          src={book.cover} 
+                          alt={book.title}
+                          className="w-16 h-24 object-cover border border-gray-300"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-black mb-1 leading-tight">{book.title}</h3>
+                        <p className="text-gray-800 font-semibold mb-3">by {book.author}</p>
+                        <p className="text-gray-700 text-sm line-clamp-3 mb-4">
+                          {book.notes.slice(0, 150)}...
+                        </p>
+                        <div className="flex items-center text-black">
+                          <span className="text-sm font-bold tracking-wide uppercase">Choose This Direction</span>
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center mt-8">
+                <button 
+                  onClick={fetchRandomBooks}
+                  className="bg-white hover:bg-gray-100 text-black border-2 border-black px-6 py-3 text-sm font-bold tracking-wide uppercase"
+                >
+                  Show Different Books
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading for Step 2 */}
+          {loading && step === 'selecting' && (
+            <div className="text-center py-16 border-2 border-black bg-gray-50">
+              <RefreshCw className="w-12 h-12 text-black mx-auto mb-4 animate-spin" />
+              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">{loadingStage}</h3>
+              <p className="text-gray-700 italic">Consulting FT Reviews, LRB, and other prestigious sources...</p>
+            </div>
+          )}
+
+          {/* Step 3: Recommendations */}
+          {step === 'recommendations' && recommendations.length > 0 && (
             <div className="space-y-8">
               <div className="text-center border-b-2 border-black pb-4 mb-8">
-                <h2 className="text-3xl font-bold text-black mb-2">RECOMMENDED READING</h2>
-                <div className="flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-black mr-2" />
-                  <span className="text-sm font-semibold tracking-widest uppercase">Arranged by Publication Date</span>
+                <h2 className="text-3xl font-bold text-black mb-2">CURATED RECOMMENDATIONS</h2>
+                <div className="flex items-center justify-center mb-4">
+                  <Check className="w-5 h-5 text-black mr-2" />
+                  <span className="text-sm font-semibold tracking-widest uppercase">Based on: "{selectedBook?.title}"</span>
                 </div>
+                <p className="text-gray-700 italic">From Financial Times, London Review of Books, and other leading critics</p>
               </div>
 
               {recommendations.map((book, index) => (
@@ -199,12 +253,14 @@ export default function BookRecommendationApp() {
                         {book.publicationDate}
                       </span>
                       <span className="px-3 py-1 border border-black text-black text-xs font-bold tracking-wide uppercase">
-                        {book.genre}
+                        {book.source}
                       </span>
-                      <span className="flex items-center font-semibold">
-                        <Star className="w-4 h-4 mr-1 fill-black text-black" />
-                        {book.rating}/5
-                      </span>
+                      {book.rating > 0 && (
+                        <span className="flex items-center font-semibold">
+                          <Star className="w-4 h-4 mr-1 fill-black text-black" />
+                          {book.rating}/5
+                        </span>
+                      )}
                     </div>
                   </header>
 
@@ -212,7 +268,7 @@ export default function BookRecommendationApp() {
                     <p className="text-gray-800 leading-relaxed text-justify mb-4">{book.description}</p>
                     
                     <div className="border-l-4 border-black pl-4 bg-gray-50 p-4">
-                      <h4 className="font-bold text-black text-sm tracking-wide uppercase mb-2">Editorial Recommendation</h4>
+                      <h4 className="font-bold text-black text-sm tracking-wide uppercase mb-2">Critical Assessment</h4>
                       <p className="text-gray-800 italic leading-relaxed">
                         {book.reason}
                       </p>
@@ -230,25 +286,49 @@ export default function BookRecommendationApp() {
                       <ExternalLink className="w-4 h-4 ml-2" />
                     </a>
                     <a
-                      href={getReviewLink(book.title, book.reviewSource)}
+                      href={getReviewLink(book.reviewUrl, book.title)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-white hover:bg-gray-100 text-black border-2 border-black px-6 py-3 text-sm font-bold tracking-wide uppercase transition-colors duration-200 flex items-center"
                     >
-                      Critical Reviews
+                      Read Review
                       <ExternalLink className="w-4 h-4 ml-2" />
                     </a>
                   </footer>
                 </article>
               ))}
+
+              <div className="text-center pt-8 border-t-2 border-black">
+                <button 
+                  onClick={startOver}
+                  className="bg-black hover:bg-gray-800 text-white px-8 py-3 border-2 border-black text-sm font-bold tracking-wide uppercase"
+                >
+                  Find More Recommendations
+                </button>
+              </div>
             </div>
           )}
 
-          {recommendations.length === 0 && !loading && !error && (
+          {step === 'recommendations' && recommendations.length === 0 && !loading && (
             <div className="text-center py-16 border-2 border-black bg-gray-50">
               <Book className="w-24 h-24 text-black mx-auto mb-6" />
-              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">Awaiting Your Command</h3>
-              <p className="text-gray-700 italic">Generate personalized recommendations above to begin your literary journey</p>
+              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">No Recommendations Found</h3>
+              <p className="text-gray-700 italic mb-4">We couldn't find similar books in our review sources</p>
+              <button 
+                onClick={startOver}
+                className="bg-black hover:bg-gray-800 text-white px-6 py-3 text-sm font-bold tracking-wide uppercase"
+              >
+                Try Different Selection
+              </button>
+            </div>
+          )}
+
+          {/* Initial state */}
+          {step === 'start' && !loading && !error && recommendations.length === 0 && readwiseBooks.length === 0 && (
+            <div className="text-center py-16 border-2 border-black bg-gray-50">
+              <Book className="w-24 h-24 text-black mx-auto mb-6" />
+              <h3 className="text-xl font-bold text-black mb-2 tracking-wide uppercase">Ready to Discover</h3>
+              <p className="text-gray-700 italic">Click above to begin your curated literary journey</p>
             </div>
           )}
         </div>
