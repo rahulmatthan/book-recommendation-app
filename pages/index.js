@@ -4,6 +4,7 @@ import Head from 'next/head';
 
 export default function BookRecommendationApp() {
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
   const [recommendations, setRecommendations] = useState([]);
   const [readwiseData, setReadwiseData] = useState(null);
   const [error, setError] = useState(null);
@@ -18,8 +19,8 @@ export default function BookRecommendationApp() {
       }
       const data = await response.json();
       
-      // Process the Readwise data to extract preferences
-      const recentBooks = data.results.slice(0, 10).map(book => ({
+      // Process the Readwise data to extract preferences  
+      const recentBooks = data.results.slice(0, 50).map(book => ({
         title: book.title,
         author: book.author,
         notes: book.highlights?.map(h => h.text).join('. ') || book.summary || "No notes available"
@@ -39,13 +40,21 @@ export default function BookRecommendationApp() {
     setLoading(true);
     setError(null);
     setRecommendations([]);
+    setLoadingStage('Connecting to your Readwise library...');
     
     try {
       // Fetch Readwise data
       const readwise = await fetchReadwiseData();
       setReadwiseData(readwise);
+      
+      setLoadingStage('Analyzing your reading patterns and preferences...');
+      
+      // Add a small delay to show the progress
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setLoadingStage('Searching the web for recently published books...');
 
-      // Generate recommendations using our API
+      // Generate recommendations using our web-searching API
       const recommendResponse = await fetch('/api/recommendations', {
         method: 'POST',
         headers: {
@@ -61,6 +70,8 @@ export default function BookRecommendationApp() {
         throw new Error(errorData.message || 'Failed to generate recommendations');
       }
 
+      setLoadingStage('Matching books to your interests...');
+      
       const data = await recommendResponse.json();
       
       // Sort by publication year (newest first)
@@ -73,6 +84,7 @@ export default function BookRecommendationApp() {
     }
     
     setLoading(false);
+    setLoadingStage('');
   };
 
   const getAmazonInLink = (title, author) => {
@@ -135,7 +147,7 @@ export default function BookRecommendationApp() {
                 {loading ? (
                   <>
                     <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
-                    Analyzing Literary Preferences...
+                    {loadingStage || 'Searching for your perfect books...'}
                   </>
                 ) : (
                   <>
@@ -144,6 +156,13 @@ export default function BookRecommendationApp() {
                   </>
                 )}
               </button>
+              {loading && (
+                <div className="mt-4 text-center">
+                  <p className="text-gray-600 text-sm italic">
+                    This may take 1-2 minutes as we search the web for the latest publications...
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
