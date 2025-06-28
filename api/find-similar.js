@@ -214,6 +214,7 @@ async function searchGoogleBooksAdvanced(query) {
             categories: volumeInfo.categories || [],
             averageRating: volumeInfo.averageRating || 0,
             ratingsCount: volumeInfo.ratingsCount || 0,
+            thumbnail: volumeInfo.imageLinks?.thumbnail || volumeInfo.imageLinks?.smallThumbnail || '',
             source: 'Google Books'
           });
         }
@@ -325,7 +326,8 @@ function scoreRecommendations(books, profile) {
       score,
       reason: generateReasonText(reasons, book),
       publicationDate: formatDate(book.publishedDate),
-      rating: book.averageRating || 0
+      rating: book.averageRating || 0,
+      image: book.thumbnail || ''
     };
   });
 }
